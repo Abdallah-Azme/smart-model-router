@@ -1,0 +1,253 @@
+{
+  "skill_name": "smart-model-router",
+  "suite": "skill-routing and effort-routing",
+  "status": "AUDITED AND LARGELY EXECUTED 2026-08-19 in adapted form (see audit_2026_08_19). Results live in the validation report and in C:/Users/abdallah/Desktop/ahmed/ezshop-saas/bench-iter2.",
+  "harness_notes": [
+    "Each eval needs counterfactual configurations, not a with/without-skill pair. A configuration is a (model, effort, skills, context) tuple, so these must be run through named agent definitions or a Workflow script \u2014 the Agent tool alone cannot set effort or grant skills per call.",
+    "Recommended runner: define one agent definition per configuration under .claude/agents/, then execute each eval prompt once per configuration against a fresh copy of the fixture, saving ROUTE.md / ANSWER.md / transcript.md / metrics.json exactly as the iter1 and iter2 runs did.",
+    "Capture per run: model, effort, skills granted, total_tokens, duration_ms, total_tool_calls, subagent count. Report any metric the environment does not expose as unavailable rather than estimating it.",
+    "Risk-weight the grading. Missing a formatting inconsistency and missing a tenant leak are not the same defect, and an aggregate pass rate that treats them equally will recommend the wrong default."
+  ],
+  "skill_routing_evals": [
+    {
+      "id": "SA",
+      "name": "relevant-skill-inheritance",
+      "question": "Does a worker that clearly benefits from a specific installed skill actually receive it and follow it?",
+      "prompt": "Add a Filament resource for Products with a status filter and a bulk archive action, following how the rest of our admin panel is built.",
+      "configurations": [
+        "sonnet/medium + Skill(laravel-filament)",
+        "sonnet/medium + no skills"
+      ],
+      "expectations": [
+        "The worker granted the framework skill uses the API surface that skill prescribes rather than a deprecated or invented one",
+        "The route names which skill was granted and why it was needed for this worker specifically",
+        "No skill unrelated to the admin-panel task is granted"
+      ]
+    },
+    {
+      "id": "SB",
+      "name": "no-unnecessary-skills",
+      "question": "With many skills installed, does a tiny task stay at zero or one skill?",
+      "prompt": "Rename the ProductFilterData DTO to ProductQueryFilters and update its imports.",
+      "configurations": [
+        "sonnet/medium, router decides skills",
+        "sonnet/medium + 8 unrelated skills granted"
+      ],
+      "expectations": [
+        "The router grants zero additional skills for this task",
+        "No delegation occurs at all",
+        "Total tool calls stay proportionate to a three-file rename (16 or fewer)",
+        "Granting the 8 unrelated skills measurably increases tokens or tool calls without improving the diff \u2014 record the delta as the cost of skill explosion"
+      ]
+    },
+    {
+      "id": "SC",
+      "name": "parent-workflow-not-inherited",
+      "question": "When the coordinator is running a planning or orchestration workflow, is a mechanical child spared it?",
+      "prompt": "Coordinator is mid-way through a planning workflow. It needs one fact: which files reference ProductStatus.",
+      "configurations": [
+        "haiku/low + no skills (recon-scout)",
+        "haiku/low + the full parent workflow skill set"
+      ],
+      "expectations": [
+        "The child worker receives no planning or orchestration skill",
+        "The child receives a precise one-sentence assignment instead of the parent's workflow",
+        "The child's answer is at least as complete as the burdened configuration's, at lower token cost"
+      ]
+    },
+    {
+      "id": "SD",
+      "name": "project-local-precedence",
+      "question": "Do project-local rules beat generic global guidance when they conflict?",
+      "fixture_setup": "Add a project skill at .claude/skills/project-conventions/SKILL.md stating that business logic lives in Actions and that a service layer is explicitly forbidden. Keep a generic global skill that recommends a service layer.",
+      "prompt": "Add order cancellation logic.",
+      "configurations": [
+        "sonnet/medium + both skills granted",
+        "sonnet/medium + global skill only"
+      ],
+      "expectations": [
+        "The implementation puts logic in an Action, following the project rule",
+        "The response states that the project convention governs where the two disagree",
+        "The generic recommendation is not applied silently over the project constraint"
+      ]
+    },
+    {
+      "id": "SE",
+      "name": "skill-conflict-avoided",
+      "question": "Does the router avoid granting two skills that prescribe competing workflows?",
+      "fixture_setup": "Install two plausible testing-workflow skills with partly conflicting prescriptions (for example one mandating TDD-first, the other mandating implementation-then-characterisation tests).",
+      "prompt": "Add test coverage for the inventory reservation path.",
+      "configurations": [
+        "sonnet/medium, router decides skills"
+      ],
+      "expectations": [
+        "Only one of the two testing workflows is granted",
+        "The choice is justified in one line by fit to the task",
+        "The worker does not attempt to satisfy both workflows simultaneously"
+      ]
+    },
+    {
+      "id": "SF",
+      "name": "skill-improves-result",
+      "question": "Does the granted skill actually improve the outcome, or only the paperwork?",
+      "prompt": "Add an Orders index endpoint with filtering, sorting and permissions, consistent with the rest of the codebase.",
+      "configurations": [
+        "sonnet/medium + framework skill",
+        "sonnet/medium + no skills"
+      ],
+      "expectations": [
+        "Adherence to project conventions is higher with the skill (query builder usage, permission naming, resource shape, test layout)",
+        "The difference is in the delivered code, not merely in the explanation",
+        "If the outcomes are equivalent, record that the skill did not earn its context on this task"
+      ]
+    },
+    {
+      "id": "SG",
+      "name": "context-overhead-of-skills",
+      "question": "What does an irrelevant skill bundle cost?",
+      "prompt": "Add a database index on orders.created_at.",
+      "configurations": [
+        "sonnet/medium + 1 relevant skill",
+        "sonnet/medium + 10 unrelated skills"
+      ],
+      "expectations": [
+        "Record tokens, tool calls and latency for both",
+        "Record any instance of the worker following guidance from an unrelated skill, or hedging between conflicting instructions",
+        "Use the measured delta to justify or refute the minimal-skill default \u2014 do not assume a direction"
+      ]
+    }
+  ],
+  "effort_routing_evals": [
+    {
+      "id": "EA",
+      "name": "normal-implementation",
+      "prompt": "Implement filtering and sorting for the products endpoint, consistent with the rest of the codebase.",
+      "configurations": [
+        "sonnet/medium",
+        "sonnet/high",
+        "opus/high"
+      ],
+      "question": "Does extra effort or capability buy enough on ordinary work to justify the cost? Expected answer: no \u2014 medium should be the default."
+    },
+    {
+      "id": "EB",
+      "name": "difficult-debugging",
+      "prompt": "Checkout intermittently fails in production with insufficient stock errors, but works locally and stock levels look correct. Figure out what is going on.",
+      "configurations": [
+        "sonnet/medium",
+        "sonnet/high",
+        "opus/high"
+      ],
+      "question": "Does sonnet/high close the gap to opus/high on a genuinely hard diagnosis? This eval already has a known correct answer: the reservation leak (ReleaseStock has zero callers), not the read-compare-write race, which predicts the opposite symptom. Grade on which root cause each configuration lands on."
+    },
+    {
+      "id": "EC",
+      "name": "architecture",
+      "prompt": "Define the inventory reservation contract and its transaction semantics so that overselling is impossible under concurrent checkout.",
+      "configurations": [
+        "sonnet/high",
+        "opus/high",
+        "opus/xhigh"
+      ],
+      "question": "What is the marginal value of each step? Report honestly if xhigh adds nothing over high."
+    },
+    {
+      "id": "ED",
+      "name": "critical-review",
+      "prompt": "Review this diff for data-integrity and tenancy defects before it ships to production.",
+      "fixture_setup": "Use a diff seeded with known subtle defects: a mass assignment dropping tenant_id, a non-idempotent backfill, a bulk UPDATE relying on a request-scoped global scope, and engine-specific SQL.",
+      "configurations": [
+        "sonnet/high review",
+        "opus/high review",
+        "opus/xhigh review"
+      ],
+      "question": "Defects found, false positives raised, and cost per genuine defect. Weight a missed tenancy leak far above a missed style nit."
+    },
+    {
+      "id": "EE",
+      "name": "reconnaissance",
+      "prompt": "Find every place ProductStatus is used or duplicated, including non-obvious ones.",
+      "configurations": [
+        "haiku/low",
+        "haiku/medium",
+        "sonnet/medium"
+      ],
+      "question": "Does higher effort or a stronger model find more of the 14 known sites \u2014 particularly the three non-obvious ones? If haiku/low finds them all, that settles the default for recon."
+    },
+    {
+      "id": "EF",
+      "name": "context-versus-effort",
+      "prompt": "Fix the reservation concurrency defect.",
+      "configurations": [
+        "sonnet/high + whole-module context pasted in",
+        "sonnet/medium + a focused packet naming the two relevant methods"
+      ],
+      "question": "Can context quality beat brute-force effort? This is one of the most decision-relevant comparisons in the suite."
+    },
+    {
+      "id": "EG",
+      "name": "skill-versus-effort",
+      "prompt": "Add a Filament resource for Products following the project's admin-panel conventions.",
+      "configurations": [
+        "sonnet/high + no skills",
+        "sonnet/medium + Skill(laravel-filament)"
+      ],
+      "question": "When does knowledge beat reasoning? Expected: the skill wins on convention adherence at lower cost."
+    },
+    {
+      "id": "EH",
+      "name": "effort-escalation-validated",
+      "prompt": "Fix the caching inconsistency where two services disagree about invalidation order.",
+      "fixture_setup": "Requires a fixture with a genuinely subtle ordering bug \u2014 the current 33-file fixture is not sufficient and must be extended.",
+      "configurations": [
+        "sonnet/medium",
+        "sonnet/high"
+      ],
+      "question": "Construct a task where medium misses and high succeeds. If no such task can be constructed, effort escalation is not earning its place and should be simplified out."
+    },
+    {
+      "id": "EI",
+      "name": "model-escalation-validated",
+      "prompt": "Audit the multi-tenant authorization architecture for cross-tenant leakage and rank findings by exploitability.",
+      "configurations": [
+        "sonnet/high",
+        "opus/high"
+      ],
+      "question": "Is there a clear outcome improvement from the model step? Iteration 2 produced supporting evidence: an Opus step caught that the tenancy scope check is a truthiness test, extending the fail-open bug to authenticated-but-falsy tenant ids \u2014 a variant the Sonnet pass missed. Confirm or refute under controlled configurations."
+    },
+    {
+      "id": "EJ",
+      "name": "xhigh-justification",
+      "prompt": "We are overselling inventory under concurrent checkout across multiple app servers. Determine the correct locking and reservation architecture and prove it cannot violate the stock invariant.",
+      "configurations": [
+        "opus/high",
+        "opus/xhigh"
+      ],
+      "question": "Does the maximum effort level produce a materially better answer? If not, say so and drop xhigh from the recommended policy rather than inventing a justification for it."
+    }
+  ],
+  "audit_2026_08_19": {
+    "design_defects_found": [
+      "SA/SD/SE/SG specified 'sonnet/medium + Skill(name)' configurations that are UNBUILDABLE: Skill(name) in agent frontmatter verified NOT to restrict invocation or trim the catalogue. Re-express as instruction-level narrowing or Read-by-path.",
+      "SA/SF/EG/EB assume the Laravel fixture / laravel-filament skill \u2014 stack bias; adapted to a generic conventions-skill test (same question, framework-neutral).",
+      "EH ('construct a task where medium misses and high succeeds') is selection-biased by design: constructing until the desired winner appears is benchmark gaming. Replaced with a fixed-task medium-vs-high comparison.",
+      "SB's 'total tool calls 16 or fewer' is an arbitrary numeric cap; compare against a measured baseline instead.",
+      "EI embeds an unverified prior claim as expected evidence, anchoring graders.",
+      "No control eval where all configurations should tie."
+    ],
+    "executed_as": {
+      "EA": "headless b-filter (router vs direct)",
+      "EB": "not run (needs runnable Laravel fixture); superseded by EC evidence",
+      "EC/EJ": "identical packet to sonnet/high vs opus/high vs opus/xhigh \u2014 opus/high caught a wrong load-bearing detail sonnet/high recommended; xhigh added ~2x cost for nuance",
+      "ED": "relay-patch reviewer substitution: sonnet/medium 3/3, sonnet/high 3/3, opus/high 3/3 x2 + extra real unplanted findings",
+      "EE": "c-big (220-file monorepo): direct sonnet, router, and forced haiku fan-out ALL 17/17; fan-out cost +44%",
+      "EF": "focused packet + medium beat symptom-only + high on cost and time at equal quality",
+      "EG(adapted)": "conventions doc via Read-by-path + medium: 4/4 planted conventions; sonnet/high without it: 0/4",
+      "EH(fixed-task)": "medium == high on ordinary two-defect billing fix",
+      "EI": "e-tenant headless: router(+opus gate) fixed all 3 planted isolation defects incl. fail-open middleware direct sonnet left unfixed, at 6.5x cost",
+      "SB": "a-rename headless: no delegation either arm; router overhead +50% cost",
+      "SC": "haiku profiles verified to carry no skill catalogue",
+      "SG(adapted)": "catalogue measured at ~11.8k input tokens (+82%) per skill-enabled spawn; two named workflow skills ~tripled a trivial task's cost"
+    }
+  }
+}
